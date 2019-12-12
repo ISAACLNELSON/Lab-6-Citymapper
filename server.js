@@ -3,12 +3,15 @@
 const express = require('express');
 const app = express();
 
+const superagent = require('superagent');
 require('dotenv').config();
 
 const cors = require('cors');
 const PORT = process.env.PORT || 3001;
 app.use(cors());
 
+let latitude; 
+let longitude;
 //Routes
 app.get('', (req, res) => {
   res.send('You\'re up!');
@@ -19,47 +22,50 @@ app.get('', (req, res) => {
 app.get('/location', (req, res) => {
   let city = req.query.data;
 
-  let locationObj = searchLatToLong(city);
+  searchLatToLong(city, res);
 
-  res.send(locationObj);
 })
 
-function searchLatToLong(city) {
-  const geoData = require('./data/geo.json');
-
-  const geoDataResults = geoData.results[0];
-
-  const newLocation = new Location(city, geoDataResults);
-  return newLocation;
+function searchLatToLong(city, res) {
+  let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${city}&key=${process.env.GEOCODE_API_KEY}`;
+  superagent.get(url)
+    .then(results => {
+      latitude = results.body.results[0].geometry.location.lat;
+      longitude = results.body.results[0].geometry.location.lng;
+      const newLocation = new Location(city, results.body.results[0]);
+      res.send(newLocation);
+    })
+  // .catch
 }
 
 function Location(city, data) {
   this.search_query = city;
-  this.formatted_query + data.formatted_address;
+  this.formatted_query = data.formatted_address;
   this.latitude = data.geometry.location.lat;
   this.longitude = data.geometry.location.lng;
 }
 
 //weather
 app.get('/weather', (req, res) => {
-  // let city = req.query.data;
-
-  let weatherObj = searchWeather();
-
-  res.send(weatherObj);
+  searchWeather(res);
+  // res.send(weatherObj);
 })
 
-function searchWeather() {
-  const weatherArr = [];
-  const weatherData = require('./data/darksky.json');
-
-  //iterate over the individual day array and put each object into  the constructor
-  let today = weatherData.daily.data;
-  for(let i = 0; i < today.length; i++){
-    console.log(today.summary);
-    weatherArr.push(new Weather(today[i].summary, today[i].time));
-  }
-  return weatherArr;
+function searchWeather(res) {
+  const url = `https://api.darksky.net/forecast/${process.env.DARKSKYKEY}/${latitude},${longitude}`;
+  //add correct lat and long!!!
+  superagent.get(url)
+    .then(results => {
+      results.body.daily.data.time
+      const weatherArr = results.body.daily.data.map((value) => {
+        
+        // console.log(value)
+        return new Weather(value.summary, value.time);
+      })
+      // example time format - Mon Jan 01 2001 - day/mon/date/year
+      res.send(weatherArr);
+      
+    })
 }
 
 function Weather(weather, time) {
